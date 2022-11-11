@@ -6,10 +6,10 @@ pub struct MD2 {
     state: [u8; 16],
     /// Incrementally computed "checksum" bytes appended at the end.
     checksum: [u8; 16],
-    /// Number of valid bytes in [`Self::buffer`].
-    count: usize,
     /// Buffer to hold the remaining input that wasn't able to be processed last update.
     buffer: [u8; 16],
+    /// Number of valid bytes in [`Self::buffer`].
+    count: usize
 }
 
 impl std::fmt::Display for MD2 {
@@ -38,11 +38,11 @@ impl MD2 {
         Self {
             state: [0u8; 16],
             checksum: [0u8; 16],
-            count: 0,
             buffer: [0u8; 16],
+            count: 0,
         }
     }
-    
+
     /// Creates a new [`MD2`] with an initial input buffer processed.
     pub fn with_input(input: &[u8]) -> Self {
         let mut initial = Self::new();
@@ -50,65 +50,86 @@ impl MD2 {
         initial
     }
 
-    /// Update the state of the digest with input data.
-    pub fn update(&mut self, input: &[u8]) {
-        // Tentitively join portion of buffer remaining with new input before processing
-        let unprocessed = [&self.buffer[..self.count], input].concat();
-        // Reset unprocessed count since any remaining input will be handled inside the loop
-        self.count = 0;
+    /// Internally update the state of the hash with a chunk of input
+    /// NOTE: This function is internal as it will only process the provided buffer and requires
+    /// full 16 byte buffers to be provided.
+    fn _update(&mut self, input: &[u8]) {
+        dbg!(input);
+        debug_assert!(input.len() == 16, "Provided input slice to must be /exactly/ 16 bytes in size");
+        // State buffer used in digest computation
+        let mut x = [0u8; 48];
 
-        // Iterate through each group of 16 bytes; one final chunk will remain if it's not an even
-        // multiple of 16 in length
-        for chunk in unprocessed.chunks(16) {
-            if chunk.len() < 16 {
-                // If we've hit an incomplete chunk that means there are no more full chunks to
-                // process and we should stop processing them
-                let len = chunk.len();
+        // Initial portion is remaining checksum from previous steps
+        x[..16].copy_from_slice(&self.state);
+        // Followed by the input
+        x[16..32].copy_from_slice(&input);
 
-                self.count = len;
-                self.buffer[..len].copy_from_slice(chunk);
+        // This section is almost verbatim as written in the RFC itself.
 
-                break;
-            }
-
-            let mut x = [0u8; 48];
-            // Initial portion is remaining checksum from previous steps
-            x[..16].copy_from_slice(&self.state);
-            // Followed by this chunk
-            x[16..32].copy_from_slice(&chunk);
-
-            // This section is almost verbatim as written in the RFC itself.
-
-            for j in 0..16 {
-                x[32 + j] = self.state[j] ^ chunk[j];
-            }
-
-            let mut t = 0;
-            
-            for j in 0..18 {
-                for k in 0..48 {
-                    x[k] ^= S[t];
-                    t = x[k] as usize;
-                }
-
-                t = (t + j) % 256;
-            }
-            // This is the only portion of X that persists into the next cycle
-            self.state.copy_from_slice(&x[..16]);
-
-            // Update the checksum that is appended in [`Self::finalize`].
-            
-            // L starts at `self.checksum[15]` because if we were following the pseudocode description
-            // the next iteration of the checksum loop would start with the last `L = C[j]` where `j = 15`
-            // from the final iteration of the inner loop
-            let mut l = self.checksum[15];
-            
-            // Compute the update checksum bytes
-            for j in 0..16 {
-                self.checksum[j] ^= S[(chunk[j] ^ l) as usize];
-                l = self.checksum[j];
-            }
+        for j in 0..16 {
+            x[32 + j] = self.state[j] ^ input[j];
         }
+
+        let mut t = 0;
+
+        for j in 0..18 {
+            for k in 0..48 {
+                x[k] ^= S[t];
+                t = x[k] as usize;
+            }
+
+            t = (t + j) % 256;
+        }
+        // This is the only portion of X that persists into the next cycle
+        self.state.copy_from_slice(&x[..16]);
+
+        // Update the checksum that is appended in [`Self::finalize`].
+ 
+        // L starts at `self.checksum[15]` because if we were following the pseudocode description
+        // the next iteration of the checksum loop would start with the last `L = C[j]` where `j = 15`
+        // from the final iteration of the inner loop
+        let mut l = self.checksum[15];
+
+        // Compute the update checksum bytes
+        for j in 0..16 {
+            self.checksum[j] ^= S[(input[j] ^ l) as usize];
+            l = self.checksum[j];
+        }
+    }
+
+    /// Provide input to compute the digest over.
+    pub fn update(&mut self, input: &[u8]) {
+        // Computes the amount of bytes to copy into the unconsumed input buffer, capping it at the available input
+        let remaining = (16 - self.count).min(input.len());
+
+        // Attempt to fill the left over buffer with input data
+        self.buffer[self.count..self.count + remaining].copy_from_slice(&input[..remaining]);
+        // Account for the new data in the buffer
+        self.count += remaining;
+
+        // If we filled up the buffer then we can compute an update cycle over it
+        if self.count == 16 {
+            self._update(&self.buffer.clone());
+            self.count = 0;
+        } else {
+            // NOTE: We /must/ exit here as  otherwise we will assume we processed all the data
+            // and that the remaining bytes in the input are the left over bytes to process next
+            // iteration, ignoring the initial unprocessed bytes.
+            return;
+        }
+
+        // If there's left over data in input then we should process it until we run out
+        let mut offset = remaining;
+        let mut remaining = input.len() - remaining;
+        while remaining >= 16 {
+            self._update(&input[offset..offset+16]);
+            remaining -= 16;
+            offset += 16;
+        }
+
+        // Store any resulting data back into the leftover buffer
+        self.count = remaining;
+        self.buffer[..remaining].copy_from_slice(&input[offset..]);
     }
 
     /// Consume self and return the computed digest.
@@ -118,15 +139,13 @@ impl MD2 {
 
         // Take advantage of internals to directly shove padding bytes into input buffer
         self.buffer[self.count..].fill(padding_len);
-        self.count = 16;
-
-        // Update requires an input to run, just feed it an empty buffer since we already fed in
-        // the padding manually
-        self.update(b"");
+        // Apply internal update over the exactly filled and padded buffer
+        self._update(&self.buffer.clone());
 
         // Finally append the checksum bytes (note the clone required to not borrow from self twice)
-        self.update(&self.checksum.clone());
-        
+        // Again using [`Self::_update`] since we already know we're feeding it a properly sized buffer
+        self._update(&self.checksum.clone());
+
         // Final hash is last state
         self.state
     }
