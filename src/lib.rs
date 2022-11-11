@@ -1,14 +1,19 @@
+/// Implementation of the [MD2](https://datatracker.ietf.org/doc/html/rfc1319) hash algorithm.
 #[derive(Clone, Copy)]
 pub struct MD2 {
+    /// Leftover state after processing in [`Self::update`]. These will actually be the final
+    /// digest output after finalization.
     state: [u8; 16],
+    /// Incrementally computed "checksum" bytes appended at the end.
     checksum: [u8; 16],
-    // Number of bytes, modulo 16
+    /// Number of valid bytes in [`Self::buffer`].
     count: usize,
+    /// Buffer to hold the remaining input that wasn't able to be processed last update.
     buffer: [u8; 16],
 }
 
-/// The debug implementation computes and prints the current final checksum.
 impl std::fmt::Display for MD2 {
+    /// Format the final digest as a hex string without affecting state.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Compute the final checksum on a copy since [`finalize`] consumes self
         let result = (*self).finalize();
@@ -21,7 +26,6 @@ impl std::fmt::Display for MD2 {
     }
 }
 
-/// [`std::fmt::Debug`] implementation that falls back to [`std::fmt::Display`].
 impl std::fmt::Debug for MD2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <MD2 as std::fmt::Display>::fmt(self, f)
@@ -106,6 +110,7 @@ impl MD2 {
         }
     }
 
+    /// Consume self and return the computed digest.
     pub fn finalize(mut self) -> [u8; 16] {
         // First compute the padding required to update with the last input chunk
         let padding_len = (16 - self.count) as u8;
@@ -128,7 +133,8 @@ impl Default for MD2 {
     }
 }
 
-// MD2 uses a "random" substitution table derrived from the digits of pi.
+/// Substitutions used in the computation of MD2; these are effectively just random bytes for any
+/// meaningful purposes.
 const S: [u8; 256] = [
     41, 46, 67, 201, 162, 216, 124, 1, 61, 54, 84, 161, 236, 240, 6, 19, 98, 167, 5, 243, 192, 199,
     115, 140, 152, 147, 43, 217, 188, 76, 130, 202, 30, 155, 87, 60, 253, 212, 224, 22, 103, 66,
@@ -156,8 +162,7 @@ mod test {
             "Testing hash for \"{}\", expected \"{}\" but got \"{}\"", input, expectation, result);
     }
 
-    /// Test against the reference hashes from the
-    /// [RFC](https://datatracker.ietf.org/doc/html/rfc1319)
+    /// Test against the reference hashes from the [RFC](https://datatracker.ietf.org/doc/html/rfc1319)
     #[test]
     fn basic() {
         test_hash("", "8350e5a3e24c153df2275c9f80692773");
