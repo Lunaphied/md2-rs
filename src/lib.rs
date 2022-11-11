@@ -79,6 +79,7 @@ impl MD2 {
 
             t = (t + j) % 256;
         }
+
         // This is the only portion of X that persists into the next cycle
         self.state.copy_from_slice(&x[..16]);
 
