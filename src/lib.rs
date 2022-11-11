@@ -92,6 +92,10 @@ impl MD2 {
 
         // Compute the update checksum bytes
         for j in 0..16 {
+            // NOTE: The updated checksum state is computed by using xor instead of following the
+            // pseudocode description, this matches the source code, all available implementations
+            // and the reference hash results. This appears to be an error in the RFC describing
+            // MD2's implementation.
             self.checksum[j] ^= S[(input[j] ^ l) as usize];
             l = self.checksum[j];
         }
