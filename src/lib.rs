@@ -65,7 +65,6 @@ impl MD2 {
                 // process and we should stop processing them
                 let len = chunk.len();
 
-                //dbg!(&chunk);
                 self.count = len;
                 self.buffer[..len].copy_from_slice(chunk);
 
