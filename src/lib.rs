@@ -34,7 +34,7 @@ impl std::fmt::Debug for MD2 {
 
 impl MD2 {
     /// Creates a new [`MD2`] ready for use.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             state: [0u8; 16],
             checksum: [0u8; 16],
@@ -77,6 +77,8 @@ impl MD2 {
             x[..16].copy_from_slice(&self.state);
             // Followed by this chunk
             x[16..32].copy_from_slice(&chunk);
+
+            // This section is almost verbatim as written in the RFC itself.
 
             for j in 0..16 {
                 x[32 + j] = self.state[j] ^ chunk[j];
