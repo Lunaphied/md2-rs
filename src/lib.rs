@@ -98,18 +98,17 @@ impl MD2 {
 
     /// Provide input to compute the digest over.
     pub fn update(&mut self, input: &[u8]) {
-        // Computes the amount of bytes to copy into the unconsumed input buffer, capping it at the available input
-        let remaining = (16 - self.count).min(input.len());
+        // Compute the available input bytes to use, capped at the amount that will fit into the leftover buffer.
+        let available = input.len().min(16 - self.count);
 
-        // Attempt to fill the left over buffer with input data
-        self.buffer[self.count..self.count + remaining].copy_from_slice(&input[..remaining]);
+        // Attempt to fill the leftover buffer with input data
+        self.buffer[self.count..self.count + available].copy_from_slice(&input[..available]);
         // Account for the new data in the buffer
-        self.count += remaining;
+        self.count += available;
 
         // If we filled up the buffer then we can compute an update cycle over it
         if self.count == 16 {
             self._update(&self.buffer.clone());
-            self.count = 0;
         } else {
             // NOTE: We /must/ exit here as  otherwise we will assume we processed all the data
             // and that the remaining bytes in the input are the left over bytes to process next
@@ -118,8 +117,8 @@ impl MD2 {
         }
 
         // If there's left over data in input then we should process it until we run out
-        let mut offset = remaining;
-        let mut remaining = input.len() - remaining;
+        let mut offset = available;
+        let mut remaining = input.len() - available;
         while remaining >= 16 {
             self._update(&input[offset..offset+16]);
             remaining -= 16;
