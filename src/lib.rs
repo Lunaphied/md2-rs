@@ -113,14 +113,18 @@ impl MD2 {
 
     /// Consume self and return the computed digest.
     pub fn finalize(mut self) -> [u8; 16] {
-        // First compute the padding required to update with the last input chunk
+        // Compute padding bytes required
         let padding_len = (16 - self.count) as u8;
-        let padding_input = vec![padding_len; padding_len as usize];
 
-        // Update with the padding to flush the last remaining input
-        self.update(padding_input.as_slice());
+        // Take advantage of internals to directly shove padding bytes into input buffer
+        self.buffer[self.count..].fill(padding_len);
+        self.count = 16;
 
-        // Finally append the checksum bytes
+        // Update requires an input to run, just feed it an empty buffer since we already fed in
+        // the padding manually
+        self.update(b"");
+
+        // Finally append the checksum bytes (note the clone required to not borrow from self twice)
         self.update(&self.checksum.clone());
         
         // Final hash is last state
