@@ -54,8 +54,7 @@ impl MD2 {
     /// NOTE: This function is internal as it will only process the provided buffer and requires
     /// full 16 byte buffers to be provided.
     fn _update(&mut self, input: &[u8]) {
-        dbg!(input);
-        debug_assert!(input.len() == 16, "Provided input slice to must be /exactly/ 16 bytes in size");
+        debug_assert_eq!(input.len(), 16, "Provided input slice to must be /exactly/ 16 bytes in size");
         // State buffer used in digest computation
         let mut x = [0u8; 48];
 
@@ -84,7 +83,7 @@ impl MD2 {
         self.state.copy_from_slice(&x[..16]);
 
         // Update the checksum that is appended in [`Self::finalize`].
- 
+
         // L starts at `self.checksum[15]` because if we were following the pseudocode description
         // the next iteration of the checksum loop would start with the last `L = C[j]` where `j = 15`
         // from the final iteration of the inner loop
@@ -182,7 +181,7 @@ mod test {
     /// Helper function to simplify testing hashes of strings against their known good results.
     fn test_hash(input: &str, expectation: &str) {
         let result = MD2::with_input(input.as_bytes()).to_string();
-        assert_eq!(result, expectation, 
+        assert_eq!(result, expectation,
             "Testing hash for \"{}\", expected \"{}\" but got \"{}\"", input, expectation, result);
     }
 
@@ -194,7 +193,7 @@ mod test {
         test_hash("abc", "da853b0d3f88d99b30283a69e6ded6bb");
         test_hash("message digest", "ab4f496bfb2a530b219ff33031fe06b0");
         test_hash("abcdefghijklmnopqrstuvwxyz", "4e8ddff3650292ab5a4108c3aa47940b");
-        test_hash("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 
+        test_hash("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
                   "da33def2a42df13975352846c30338cd"
         );
         test_hash("12345678901234567890123456789012345678901234567890123456789012345678901234567890",
